@@ -12,7 +12,7 @@ _CHECK_FOR_UPDATES_COMMAND = (
     '--ignore-default-opts',
     '--pretend',
     '--verbose', '--color', 'n',
-    '--complete-graph', '--deep', '--newuse', '--update',
+    '--complete-graph', '--deep', '--update',
     '@world',
 )
 
@@ -20,7 +20,7 @@ _UPDATE_COMMAND = (
     'emerge',
     '--ask',
     '--verbose', '--tree', '--quiet',
-    '--complete-graph', '--deep', '--newuse', '--update',
+    '--complete-graph', '--deep', '--update',
     '--keep-going',
     '@world',
 )
@@ -30,7 +30,7 @@ def subprocess_nocheck_output(argv, **kvargs):
     kvargs['stdout'] = subprocess.PIPE
     p = subprocess.Popen(argv, **kvargs)
     p.wait()
-    return p.stdout.read()
+    return p.stdout.read().decode('utf8')
 
 
 class Gentoo(Distro):

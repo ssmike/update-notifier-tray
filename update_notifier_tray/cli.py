@@ -2,16 +2,15 @@
 # Licensed under GPL v3 or later
 
 import argparse
-import os
 import signal
 import subprocess
 import sys
 from threading import Event, Lock, Thread
 import time
 
-import pynotify
-from PySide import QtGui, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 
+from update_notifier_tray.notify import notify
 from update_notifier_tray.distros.debian import Debian
 from update_notifier_tray.distros.gentoo import Gentoo
 from update_notifier_tray.distros.ubuntu import Ubuntu
@@ -24,18 +23,18 @@ _DISTRO_CLASSES = (
 )
 
 
-class _UpdateNotifierTrayIcon(QtGui.QSystemTrayIcon):
+class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
     def __init__(self, icon, parent, distro):
         super(_UpdateNotifierTrayIcon, self).__init__(icon, parent)
 
-        menu = QtGui.QMenu(parent)
-        update_action = QtGui.QAction(
+        menu = QtWidgets.QMenu(parent)
+        update_action = QtWidgets.QAction(
             distro.describe_update_gui_action(),
             self,
             triggered=distro.start_update_gui,
         )
         menu.addAction(update_action)
-        exit_action = QtGui.QAction('&Exit', self, triggered=self.handle_exit)
+        exit_action = QtWidgets.QAction('&Exit', self, triggered=self.handle_exit)
         menu.addAction(exit_action)
         self.setContextMenu(menu)
 
@@ -45,10 +44,11 @@ class _UpdateNotifierTrayIcon(QtGui.QSystemTrayIcon):
         self._distro = distro
 
     def handle_activated(self, reason):
-        if reason in (QtGui.QSystemTrayIcon.Trigger, QtGui.QSystemTrayIcon.DoubleClick, QtGui.QSystemTrayIcon.MiddleClick):
+        print('activated', 'reason=', reason)
+        if reason in (QtWidgets.QSystemTrayIcon.Trigger, QtWidgets.QSystemTrayIcon.DoubleClick, QtGui.QSystemTrayIcon.MiddleClick):
             self._distro.start_update_gui()
 
-    @QtCore.Slot(int)
+    @QtCore.pyqtSlot(int)
     def handle_count_changed(self, count):
         self._previous_count_lock.acquire()
 
@@ -71,8 +71,7 @@ class _UpdateNotifierTrayIcon(QtGui.QSystemTrayIcon):
             self.setToolTip(message)
             self.show()
 
-            notification = pynotify.Notification(title, message)
-            notification.show()
+            notify(title, message)
         else:
             self.hide()
 
@@ -86,7 +85,7 @@ class _UpdateNotifierTrayIcon(QtGui.QSystemTrayIcon):
 
 
 class _UpdateCheckThread(Thread, QtCore.QObject):
-    _count_changed = QtCore.Signal(int)
+    _count_changed = QtCore.pyqtSignal(int)
 
     def __init__(self, distro):
         Thread.__init__(self)
@@ -104,7 +103,7 @@ class _UpdateCheckThread(Thread, QtCore.QObject):
         while not self._exit_wanted.isSet():
             count = self._distro.get_updateable_package_count()
             self._count_changed.emit(count)
-            for i in xrange(self._distro.get_check_interval_seconds()):
+            for i in range(self._distro.get_check_interval_seconds()):
                 if self._exit_wanted.isSet():
                     break
                 time.sleep(1)
@@ -125,8 +124,8 @@ def main():
 
     if options.distro_callable is None:
         with open('/dev/null', 'w') as dev_null:
-            lsb_release_minus_a_output = subprocess.check_output([
-                'lsb_release', '-a'], stderr=dev_null)
+            lsb_release_minus_a_output = str(subprocess.check_output([
+                'lsb_release', '-a'], stderr=dev_null))
         for clazz in _DISTRO_CLASSES:
             if clazz.detected(lsb_release_minus_a_output):
                 options.distro_callable = clazz
@@ -139,16 +138,14 @@ def main():
             sys.exit(1)
     distro = options.distro_callable()
 
-    app = QtGui.QApplication(sys.argv)
-    dummy_widget = QtGui.QWidget()
-    icon = QtGui.QIcon(
-        '/usr/share/icons/Tango/scalable/status/software-update-available.svg')
-    tray_icon = _UpdateNotifierTrayIcon(icon, dummy_widget, distro)
+    app = QtWidgets.QApplication(sys.argv)
+    dummy = QtWidgets.QWidget()
+    icon = QtGui.QIcon.fromTheme('system-software-update')
+    tray_icon = _UpdateNotifierTrayIcon(icon, dummy, distro)
     check_thread = _UpdateCheckThread(distro)
-    pynotify.init(os.path.basename(sys.argv[0]))
 
     check_thread.set_tray_icon(tray_icon)
     tray_icon.set_thread(check_thread)
 
     check_thread.start()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
