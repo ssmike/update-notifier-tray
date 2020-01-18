@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=update-notfier-tray
+Exec=/usr/bin/update-notifier-tray
+Icon=system-software-update
+Terminal=false
+Categories=Utility;
