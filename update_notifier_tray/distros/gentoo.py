@@ -3,6 +3,7 @@
 
 import signal
 import subprocess
+import shutil
 
 from update_notifier_tray.distro import Distro
 
@@ -61,9 +62,11 @@ class Gentoo(Distro):
         return '(set -x; sudo %s) ; cd ~; bash -i' % ' '.join(_UPDATE_COMMAND)
 
     def start_update_gui(self):
-        subprocess.Popen([
-            'terminator',
-            '-e', self._get_update_command(),
-        ])
+        for cmd in ['konsole', 'xterm']:
+            if shutil.which(cmd):
+                subprocess.Popen([
+                    cmd, '-e', 'bash', '-c', self._get_update_command(),
+                ])
+                break
         # So the kernel takes care of the zombie
         signal.signal(signal.SIGCHLD, signal.SIG_IGN)

@@ -44,8 +44,7 @@ class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
         self._distro = distro
 
     def handle_activated(self, reason):
-        print('activated', 'reason=', reason)
-        if reason in (QtWidgets.QSystemTrayIcon.Trigger, QtWidgets.QSystemTrayIcon.DoubleClick, QtGui.QSystemTrayIcon.MiddleClick):
+        if reason in (QtWidgets.QSystemTrayIcon.Trigger, QtWidgets.QSystemTrayIcon.DoubleClick, QtWidgets.QSystemTrayIcon.MiddleClick):
             self._distro.start_update_gui()
 
     @QtCore.pyqtSlot(int)
