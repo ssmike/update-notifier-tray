@@ -105,8 +105,8 @@ class _UpdateCheckThread(Thread, QtCore.QObject):
 
     def run(self):
         while not self._exit_wanted:
+            self._event.clear()
             try:
-                self._event.clear()
                 count = self._distro.get_updateable_package_count()
                 print('%d updates' % (count,))
                 self.count_changed.emit(count)
