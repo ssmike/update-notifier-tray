@@ -24,8 +24,11 @@ _DISTRO_CLASSES = (
 
 
 class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
-    def __init__(self, icon, parent, distro, checker):
-        super(_UpdateNotifierTrayIcon, self).__init__(icon, parent)
+    def __init__(self, icons, parent, distro, checker):
+        self._updates_available, self._error = icons
+
+        super(_UpdateNotifierTrayIcon, self).__init__(
+            self._updates_available, parent)
         self._thread = checker
 
         menu = QtWidgets.QMenu(parent)
@@ -42,27 +45,24 @@ class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
         self.setContextMenu(menu)
 
         self.activated.connect(self.handle_activated)
-        self._previous_count = 0
-        self._previous_count_lock = Lock()
         self._distro = distro
 
         checker.count_changed.connect(self.handle_count_changed)
+        checker.error.connect(self.handle_error)
 
     def handle_activated(self, reason):
         if reason in (QtWidgets.QSystemTrayIcon.Trigger, QtWidgets.QSystemTrayIcon.DoubleClick, QtWidgets.QSystemTrayIcon.MiddleClick):
             self._distro.start_update_gui()
 
+    @QtCore.pyqtSlot()
+    def handle_error(self):
+        self.setToolTip("can't check for updates")
+        self.setIcon(self._error)
+        self.show()
+
     @QtCore.pyqtSlot(int)
     def handle_count_changed(self, count):
-        self._previous_count_lock.acquire()
-
-        unchanged = (count == self._previous_count)
-        self._previous_count = count
-
-        self._previous_count_lock.release()
-
-        if unchanged:
-            return
+        self.setIcon(self._updates_available)
 
         if count > 0:
             title = 'Updates available'
@@ -87,6 +87,7 @@ class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
 
 class _UpdateCheckThread(Thread, QtCore.QObject):
     count_changed = QtCore.pyqtSignal(int)
+    error = QtCore.pyqtSignal()
 
     def __init__(self, distro):
         Thread.__init__(self)
@@ -104,9 +105,13 @@ class _UpdateCheckThread(Thread, QtCore.QObject):
 
     def run(self):
         while not self._exit_wanted:
-            self._event.clear()
-            count = self._distro.get_updateable_package_count()
-            self.count_changed.emit(count)
+            try:
+                self._event.clear()
+                count = self._distro.get_updateable_package_count()
+                print('%d updates' % (count,))
+                self.count_changed.emit(count)
+            except:
+                self.error.emit()
             self._event.wait(self._distro.get_check_interval_seconds())
 
 
@@ -140,10 +145,12 @@ def main():
     distro = options.distro_callable()
 
     app = QtWidgets.QApplication(sys.argv)
-    icon = QtGui.QIcon.fromTheme('system-software-update')
+    dummy = QtWidgets.QWidget()
+    icons = [QtGui.QIcon.fromTheme(x) for x in (
+        'system-software-update', 'emblem-error')]
     check_thread = _UpdateCheckThread(distro)
     tray_icon = _UpdateNotifierTrayIcon(
-        icon, QtWidgets.QWidget(), distro, check_thread)
+        icons, dummy, distro, check_thread)
 
     check_thread.start()
     sys.exit(app.exec())

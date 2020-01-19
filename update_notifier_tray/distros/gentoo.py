@@ -27,10 +27,15 @@ _UPDATE_COMMAND = (
 )
 
 
+class BrokenPortage(Exception):
+    pass
+
+
 def subprocess_nocheck_output(argv, **kvargs):
     kvargs['stdout'] = subprocess.PIPE
     p = subprocess.Popen(argv, **kvargs)
-    p.wait()
+    if p.wait() != 0:
+        raise BrokenPortage()
     return p.stdout.read().decode('utf8')
 
 
