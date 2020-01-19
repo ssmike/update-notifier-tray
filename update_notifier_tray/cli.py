@@ -24,8 +24,9 @@ _DISTRO_CLASSES = (
 
 
 class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
-    def __init__(self, icon, parent, distro):
+    def __init__(self, icon, parent, distro, checker):
         super(_UpdateNotifierTrayIcon, self).__init__(icon, parent)
+        self._thread = checker
 
         menu = QtWidgets.QMenu(parent)
         update_action = QtWidgets.QAction(
@@ -33,15 +34,19 @@ class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
             self,
             triggered=distro.start_update_gui,
         )
-        menu.addAction(update_action)
-        exit_action = QtWidgets.QAction('&Exit', self, triggered=self.handle_exit)
-        menu.addAction(exit_action)
+        rescan_action = QtWidgets.QAction(
+            'Rescan', self, triggered=self._thread.trigger_rescan)
+        exit_action = QtWidgets.QAction(
+            '&Exit', self, triggered=self.handle_exit)
+        menu.addActions((update_action, rescan_action, exit_action))
         self.setContextMenu(menu)
 
         self.activated.connect(self.handle_activated)
         self._previous_count = 0
         self._previous_count_lock = Lock()
         self._distro = distro
+
+        checker.count_changed.connect(self.handle_count_changed)
 
     def handle_activated(self, reason):
         if reason in (QtWidgets.QSystemTrayIcon.Trigger, QtWidgets.QSystemTrayIcon.DoubleClick, QtWidgets.QSystemTrayIcon.MiddleClick):
@@ -79,33 +84,30 @@ class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
         self._thread.join()
         QtGui.qApp.quit()
 
-    def set_thread(self, check_thread):
-        self._thread = check_thread
-
 
 class _UpdateCheckThread(Thread, QtCore.QObject):
-    _count_changed = QtCore.pyqtSignal(int)
+    count_changed = QtCore.pyqtSignal(int)
 
     def __init__(self, distro):
         Thread.__init__(self)
         QtCore.QObject.__init__(self)
-        self._exit_wanted = Event()
+        self._exit_wanted = False
+        self._event = Event()
         self._distro = distro
 
-    def set_tray_icon(self, tray_icon):
-        self._count_changed.connect(tray_icon.handle_count_changed)
-
     def stop(self):
-        self._exit_wanted.set()
+        self._exit_wanted = True
+        self._event.set()
+
+    def trigger_rescan(self):
+        self._event.set()
 
     def run(self):
-        while not self._exit_wanted.isSet():
+        while not self._exit_wanted:
+            self._event.clear()
             count = self._distro.get_updateable_package_count()
-            self._count_changed.emit(count)
-            for i in range(self._distro.get_check_interval_seconds()):
-                if self._exit_wanted.isSet():
-                    break
-                time.sleep(1)
+            self.count_changed.emit(count)
+            self._event.wait(self._distro.get_check_interval_seconds())
 
 
 def main():
@@ -138,13 +140,10 @@ def main():
     distro = options.distro_callable()
 
     app = QtWidgets.QApplication(sys.argv)
-    dummy = QtWidgets.QWidget()
     icon = QtGui.QIcon.fromTheme('system-software-update')
-    tray_icon = _UpdateNotifierTrayIcon(icon, dummy, distro)
     check_thread = _UpdateCheckThread(distro)
-
-    check_thread.set_tray_icon(tray_icon)
-    tray_icon.set_thread(check_thread)
+    tray_icon = _UpdateNotifierTrayIcon(
+        icon, QtWidgets.QWidget(), distro, check_thread)
 
     check_thread.start()
     sys.exit(app.exec())
