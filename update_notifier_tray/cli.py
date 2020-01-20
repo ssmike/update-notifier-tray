@@ -5,8 +5,8 @@ import argparse
 import signal
 import subprocess
 import sys
-from threading import Event, Lock, Thread
-import time
+from threading import Event, Thread
+import logging
 
 from PyQt5 import QtWidgets, QtCore, QtGui
 
@@ -21,6 +21,10 @@ _DISTRO_CLASSES = (
     Gentoo,
     Ubuntu,
 )
+
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    stream=sys.stderr, level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
@@ -107,10 +111,12 @@ class _UpdateCheckThread(Thread, QtCore.QObject):
         while not self._exit_wanted:
             self._event.clear()
             try:
+                logger.info("scanning for updates")
                 count = self._distro.get_updateable_package_count()
-                print('%d updates' % (count,))
+                logger.debug("found %d updates" % (count,))
                 self.count_changed.emit(count)
-            except:
+            except Exception as e:
+                logger.exception(e)
                 self.error.emit()
             self._event.wait(self._distro.get_check_interval_seconds())
 
@@ -135,12 +141,12 @@ def main():
         for clazz in _DISTRO_CLASSES:
             if clazz.detected(lsb_release_minus_a_output):
                 options.distro_callable = clazz
-                print('INFO: %s detected for a distribution.'
-                      % clazz.get_command_line_name().title())
+                logger.info('INFO: %s detected for a distribution.',
+                            clazz.get_command_line_name().title())
                 break
         else:
-            print('No supported distribution was detected, please check --help output.',
-                  file=sys.stderr)
+            logging.error(
+                'No supported distribution was detected, please check --help output.')
             sys.exit(1)
     distro = options.distro_callable()
 
