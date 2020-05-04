@@ -4,18 +4,11 @@
 import signal
 import subprocess
 import shutil
+import os
 
 from update_notifier_tray.distro import Distro
 
-
-_CHECK_FOR_UPDATES_COMMAND = (
-    'emerge',
-    '--ignore-default-opts',
-    '--pretend',
-    '--verbose', '--color', 'n',
-    '--complete-graph', '--deep', '--update',
-    '@world',
-)
+os.environ['EIX_LIMIT'] = '0'
 
 _UPDATE_COMMAND = (
     'emerge',
@@ -29,6 +22,31 @@ _UPDATE_COMMAND = (
 
 class BrokenPortage(Exception):
     pass
+
+
+def check_for_updates_portage():
+    command = (
+        'emerge',
+        '--ignore-default-opts',
+        '--pretend',
+        '--verbose', '--color', 'n',
+        '--complete-graph', '--deep', '--update',
+        '@world',
+    )
+    with open('/dev/null', 'w') as dev_null:
+        output = subprocess_nocheck_output(
+            command, stderr=dev_null)
+        return len([0
+                    for line in output.split('\n')
+                    if line.startswith('[ebuild')
+                    ])
+
+
+def check_for_updates_eix():
+    command = ('eix', '--installed', '--upgrade', '--only-names')
+    with open('/dev/null', 'w') as dev_null:
+        output = subprocess_nocheck_output(command, stderr=dev_null)
+    return sum(bool(x.strip()) for x in output.split('\n'))
 
 
 def subprocess_nocheck_output(argv, **kvargs):
@@ -52,13 +70,10 @@ class Gentoo(Distro):
         return 'gentoo'
 
     def get_updateable_package_count(self):
-        with open('/dev/null', 'w') as dev_null:
-            output = subprocess_nocheck_output(
-                _CHECK_FOR_UPDATES_COMMAND, stderr=dev_null)
-            return len([0
-                        for line in output.split('\n')
-                        if line.startswith('[ebuild')
-                        ])
+        if shutil.which('eix'):
+            return check_for_updates_eix()
+        else:
+            return check_for_updates_portage()
 
     def get_check_interval_seconds(self):
         return 60 * 60 * 5
