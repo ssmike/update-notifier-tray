@@ -6,7 +6,7 @@ from gi.repository import Notify  # noqa
 
 __all__ = ['notify']
 
-Notify.init(sys.argv[0])
+Notify.init('update notifier')
 
 
 def notify(title, message):
