@@ -1,10 +1,10 @@
 # Copyright (C) 2015 Sebastian Pipping <sebastian@pipping.org>
 # Licensed under GPL v3 or later
 
-import signal
 import subprocess
 import shutil
 import os
+from .term import run_in_term
 
 from update_notifier_tray.distro import Distro
 
@@ -58,6 +58,12 @@ def subprocess_nocheck_output(argv, **kvargs):
 
 
 class Gentoo(Distro):
+    def init(self, config):
+        self._check_action = config.get('gentoo', 'check-command', fallback='emerge')
+
+    def describe_sync_action(self):
+        return 'Run emaint sync --allrepos'
+
     def describe_update_gui_action(self):
         return 'Run "emerge --ask --&update ..."'
 
@@ -70,7 +76,7 @@ class Gentoo(Distro):
         return 'gentoo'
 
     def get_updateable_package_count(self):
-        if shutil.which('eix'):
+        if self._check_action == 'eix':
             return check_for_updates_eix()
         else:
             return check_for_updates_portage()
@@ -78,15 +84,8 @@ class Gentoo(Distro):
     def get_check_interval_seconds(self):
         return 60 * 60 * 5
 
-    def _get_update_command(self):
-        return '(set -x; sudo %s) ; cd ~; bash -i' % ' '.join(_UPDATE_COMMAND)
+    def start_sync_gui(self):
+        run_in_term(('emaint', 'sync', '--allrepos'))
 
     def start_update_gui(self):
-        for cmd in ['konsole', 'xterm']:
-            if shutil.which(cmd):
-                subprocess.Popen([
-                    cmd, '-e', 'bash', '-c', self._get_update_command(),
-                ])
-                break
-        # So the kernel takes care of the zombie
-        signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+        run_in_term(_UPDATE_COMMAND)

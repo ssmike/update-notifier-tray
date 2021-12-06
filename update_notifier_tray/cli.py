@@ -7,6 +7,8 @@ import subprocess
 import sys
 from threading import Event, Thread
 import logging
+import configparser
+import os.path
 
 from PyQt5 import QtWidgets, QtCore, QtGui
 
@@ -41,6 +43,14 @@ class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
             self,
             triggered=distro.start_update_gui,
         )
+        if hasattr(distro, 'start_sync_gui'):
+            sync_action = QtWidgets.QAction(
+                distro.describe_sync_action(),
+                self,
+                triggered=distro.start_sync_gui,
+            )
+            menu.addAction(sync_action)
+
         rescan_action = QtWidgets.QAction(
             'Rescan', self, triggered=self._thread.trigger_rescan)
         exit_action = QtWidgets.QAction(
@@ -141,7 +151,7 @@ def main():
         for clazz in _DISTRO_CLASSES:
             if clazz.detected(lsb_release_minus_a_output):
                 options.distro_callable = clazz
-                logger.info('INFO: %s detected for a distribution.',
+                logger.info('%s detected for a distribution.',
                             clazz.get_command_line_name().title())
                 break
         else:
@@ -149,6 +159,14 @@ def main():
                 'No supported distribution was detected, please check --help output.')
             sys.exit(1)
     distro = options.distro_callable()
+
+    if hasattr(distro, 'init'):
+        config_path = os.path.join(os.path.expanduser('~/.config/update-notifier-tray.ini'))
+        config = configparser.ConfigParser()
+        if os.path.exists(config_path):
+            config.read(config_path)
+        logger.info('using settings from %s', config_path)
+        distro.init(config)
 
     app = QtWidgets.QApplication(sys.argv)
     dummy = QtWidgets.QWidget()
