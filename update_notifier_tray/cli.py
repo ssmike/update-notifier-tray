@@ -10,7 +10,7 @@ import logging
 import configparser
 import os.path
 
-from PyQt5 import QtWidgets, QtCore, QtGui
+from PyQt6 import QtWidgets, QtCore, QtGui
 
 from update_notifier_tray.notify import notify
 from update_notifier_tray.distros.debian import Debian
@@ -38,22 +38,22 @@ class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
         self._thread = checker
 
         menu = QtWidgets.QMenu(parent)
-        update_action = QtWidgets.QAction(
+        update_action = QtGui.QAction(
             distro.describe_update_gui_action(),
             self,
             triggered=distro.start_update_gui,
         )
         if hasattr(distro, 'start_sync_gui'):
-            sync_action = QtWidgets.QAction(
+            sync_action = QtGui.QAction(
                 distro.describe_sync_action(),
                 self,
                 triggered=distro.start_sync_gui,
             )
             menu.addAction(sync_action)
 
-        rescan_action = QtWidgets.QAction(
+        rescan_action = QtGui.QAction(
             'Rescan', self, triggered=self._thread.trigger_rescan)
-        exit_action = QtWidgets.QAction(
+        exit_action = QtGui.QAction(
             '&Exit', self, triggered=self.handle_exit)
         menu.addActions((update_action, rescan_action, exit_action))
         self.setContextMenu(menu)
@@ -65,7 +65,7 @@ class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
         checker.error.connect(self.handle_error)
 
     def handle_activated(self, reason):
-        if reason in (QtWidgets.QSystemTrayIcon.Trigger, QtWidgets.QSystemTrayIcon.DoubleClick, QtWidgets.QSystemTrayIcon.MiddleClick):
+        if reason in (QtWidgets.QSystemTrayIcon.ActivationReason.Trigger, QtWidgets.QSystemTrayIcon.ActivationReason.DoubleClick, QtWidgets.QSystemTrayIcon.ActivationReason.MiddleClick):
             self._distro.start_update_gui()
 
     @QtCore.pyqtSlot()
@@ -96,7 +96,7 @@ class _UpdateNotifierTrayIcon(QtWidgets.QSystemTrayIcon):
     def handle_exit(self):
         self._thread.stop()
         self._thread.join()
-        QtGui.qApp.quit()
+        QtWidgets.QApplication.instance().quit()
 
 
 class _UpdateCheckThread(Thread, QtCore.QObject):
